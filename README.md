@@ -145,9 +145,42 @@ Returns `204 No Content` on success. Returns `404` when the task does not exist.
 
 ## Testing
 
+Tests run against an isolated PostgreSQL database and do not use your
+application `DATABASE_URL` unless you explicitly point `TEST_DATABASE_URL` at
+the same database (which is blocked).
+
+By default, pytest starts a temporary Docker PostgreSQL container on port
+`55433`, creates the schema, runs the suite, and removes the container when
+finished.
+
+### Run the full suite
+
+From the project root with the virtual environment activated:
+
 ```bash
+source .venv/bin/activate
 pytest
 ```
+
+Verbose output:
+
+```bash
+pytest -v
+```
+
+### Optional: use your own test database
+
+Create a separate database (never reuse production data), then set:
+
+```bash
+export TEST_DATABASE_URL="postgresql://user:password@localhost:5432/taskmanager_test"
+pytest
+```
+
+Or add `TEST_DATABASE_URL` to a local `.env` file used only for development.
+
+Each test runs inside a rolled-back database transaction, so tests are
+deterministic, independent, and leave no data behind.
 
 ## Project structure
 
