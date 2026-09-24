@@ -333,18 +333,14 @@ directly to PostgreSQL. It is **not** production-ready for one million users tod
 The current design is intentionally simple, but the architecture can evolve in
 clear stages as traffic and data grow.
 
-**Application layer.** The API is stateless — no session data is stored in memory
-between requests — so you can run multiple Uvicorn/Gunicorn workers behind a load
-balancer (AWS ALB, NGINX, etc.) and scale horizontally by adding instances when CPU
-or latency rises. Keep business logic in the service layer and avoid per-instance
-state so any worker can handle any request.
+**Application layer.** The API is stateless meaning no session data is stored in memory between requests, so you can run multiple Uvicorn/Gunicorn workers behind a load balancer (AWS ALB, NGINX, etc.) and scale horizontally by adding instances when CPU or latency rises. Keep business logic in the service layer and avoid per-instance state so any worker can handle any request.
 
 **Database.** Move to a managed PostgreSQL service with automated backups, failover,
 and connection pooling (PgBouncer or the provider's pooler). The indexes on
 `status`, `due_date`, and `created_at` support common filter/sort patterns, but
 you would still monitor slow queries and adjust indexes based on real traffic. When
 read volume dominates, add read replicas for list endpoints while keeping writes on
-the primary. Table partitioning is a later step — only worth it when row counts and
+the primary. Table partitioning is a later step only worth it when row counts and
 query patterns make maintenance or scan cost a measured problem, not upfront.
 
 **Caching.** Introduce Redis for data that is read often and changes infrequently
@@ -356,7 +352,7 @@ part of the design.
 **Background processing.** Email reminders, exports, analytics, and other slow work
 should move to background workers (Celery/RQ or a managed queue) so API responses
 stay fast. The HTTP layer validates input, writes to PostgreSQL, enqueues work, and
-returns — it does not perform heavy computation inline.
+returns, it does not perform heavy computation inline.
 
 **Infrastructure sketch.** A realistic growth path looks like:
 
@@ -373,5 +369,5 @@ authentication/authorization, rate limiting at the gateway, and secrets stored i
 manager rather than plain `.env` files on servers.
 
 The point is separation of concerns: the code you have now proves the domain logic
-works; reaching large scale means adding infrastructure around it — not rewriting
+works; reaching large scale means adding infrastructure around it, not rewriting
 the core API from scratch.
