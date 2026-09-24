@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-taskmanager}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-taskmanager_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-taskmanager}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-taskmanager} -d ${POSTGRES_DB:-taskmanager}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api:
+    build: .
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      APP_NAME: ${APP_NAME:-Task Manager API}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEBUG: ${DEBUG:-false}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-taskmanager}:${POSTGRES_PASSWORD:-taskmanager_dev_password}@db:5432/${POSTGRES_DB:-taskmanager}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

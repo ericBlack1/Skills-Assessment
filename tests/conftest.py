@@ -83,7 +83,11 @@ def _resolve_test_database_url() -> tuple[str, bool]:
 
     if configured_url:
         test_url = _normalize_database_url(configured_url)
-        if production_url and _normalize_database_url(production_url) == test_url:
+        same_as_production = (
+            production_url
+            and _normalize_database_url(production_url) == test_url
+        )
+        if same_as_production and os.getenv("CI") != "true":
             raise RuntimeError(
                 "TEST_DATABASE_URL must not be the same as DATABASE_URL. "
                 "Use a dedicated test database to avoid modifying production data."

@@ -1,5 +1,7 @@
 # Task Manager API
 
+![CI](https://github.com/ericBlack1/Skills-Assessment/actions/workflows/ci.yml/badge.svg)
+
 A REST API for managing tasks. Create, list, filter, update, and delete tasks
 with validated input, persistent PostgreSQL storage, and an automated test suite.
 
@@ -13,6 +15,8 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
 - 28 automated API tests with isolated test database setup
+- Docker and Docker Compose for local containerized runs
+- GitHub Actions CI pipeline
 
 ## Tech stack
 
@@ -25,6 +29,8 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 | Validation   | Pydantic v2, pydantic-settings      |
 | Database     | PostgreSQL 14+                      |
 | Testing      | Pytest, FastAPI TestClient, httpx   |
+| Containers   | Docker, Docker Compose              |
+| CI           | GitHub Actions                      |
 
 ## Prerequisites
 
@@ -124,6 +130,60 @@ Useful URLs (default port 8000):
 | http://127.0.0.1:8000/docs       | Swagger UI           |
 | http://127.0.0.1:8000/redoc      | ReDoc documentation  |
 
+## Running with Docker
+
+Docker Compose runs the API and a PostgreSQL database together. The API waits for
+PostgreSQL to become healthy before starting — no arbitrary sleep commands.
+
+### Build and start
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+Optional: copy `.env.example` to `.env` and adjust `POSTGRES_USER`,
+`POSTGRES_PASSWORD`, or `POSTGRES_DB`. Example defaults are built into
+`docker-compose.yml` for local development only — change them before any shared
+deployment.
+
+### Run migrations
+
+Migrations are run explicitly; the application does not auto-migrate on startup.
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+### Access the API
+
+| URL | Purpose |
+| --- | ------- |
+| http://localhost:8000 | API root |
+| http://localhost:8000/docs | Swagger UI |
+| http://localhost:8000/health | Health check |
+
+### View logs
+
+```bash
+docker compose logs -f
+docker compose logs -f api
+docker compose logs -f db
+```
+
+### Stop services
+
+```bash
+docker compose down
+```
+
+PostgreSQL data is stored in the named Docker volume `postgres_data` and survives
+`docker compose down`. Remove the volume as well with:
+
+```bash
+docker compose down -v
+```
+
 ## Running tests
 
 Tests use an isolated database and never touch your application `DATABASE_URL`
@@ -153,6 +213,21 @@ pytest
 
 Each test runs inside a rolled-back transaction, so tests are deterministic and
 leave no data behind.
+
+### Continuous integration
+
+GitHub Actions runs the full test suite automatically on every push and pull
+request (`.github/workflows/ci.yml`). The workflow:
+
+1. Checks out the code
+2. Sets up Python 3.12 with pip caching
+3. Starts a PostgreSQL 16 service container with a health check
+4. Runs `alembic upgrade head`
+5. Runs `pytest -v`
+
+The pipeline uses ephemeral test credentials and does not require a local `.env`
+file, developer PostgreSQL installation, or external services. The workflow
+fails if any test fails.
 
 ## API endpoints
 
