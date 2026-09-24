@@ -7,10 +7,12 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 
 - Full CRUD for tasks (create, list, get, update, delete)
 - Filter tasks by status (`todo`, `in-progress`, `done`)
+- Paginated list responses with metadata (`page`, `limit`, `total`, etc.)
+- Sorting by whitelisted fields (`created_at`, `updated_at`, `due_date`, `title`, `status`)
 - Input validation with clear error messages
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
-- 17 automated API tests with isolated test database setup
+- 28 automated API tests with isolated test database setup
 
 ## Tech stack
 
@@ -159,7 +161,7 @@ Base path: `/api/v1`
 | Method | Path                   | Description             | Success code |
 | ------ | ---------------------- | ----------------------- | ------------ |
 | POST   | `/api/v1/tasks`        | Create a task           | 201          |
-| GET    | `/api/v1/tasks`        | List all tasks          | 200          |
+| GET    | `/api/v1/tasks`        | List tasks (paginated)  | 200          |
 | GET    | `/api/v1/tasks/{id}`   | Get one task            | 200          |
 | PATCH  | `/api/v1/tasks/{id}`   | Partially update a task | 200          |
 | DELETE | `/api/v1/tasks/{id}`   | Delete a task           | 204          |
@@ -207,30 +209,53 @@ curl -X POST http://127.0.0.1:8000/api/v1/tasks \
 }
 ```
 
-### List tasks (with optional status filter)
+### List tasks (filter, pagination, sorting)
 
 ```bash
 curl http://127.0.0.1:8000/api/v1/tasks
-curl "http://127.0.0.1:8000/api/v1/tasks?status=in-progress"
+curl "http://127.0.0.1:8000/api/v1/tasks?status=in-progress&page=2&limit=20"
+curl "http://127.0.0.1:8000/api/v1/tasks?sort_by=due_date&sort_order=asc"
+curl "http://127.0.0.1:8000/api/v1/tasks?status=todo&page=1&limit=20&sort_by=due_date&sort_order=asc"
 ```
+
+Query parameters:
+
+| Parameter    | Default      | Constraints   | Description                          |
+| ------------ | ------------ | ------------- | ------------------------------------ |
+| `status`     | —            | enum          | Filter by task status                |
+| `page`       | `1`          | `>= 1`        | Page number                          |
+| `limit`      | `10`         | `1`–`100`     | Tasks per page                       |
+| `sort_by`    | `created_at` | whitelist     | `created_at`, `updated_at`, `due_date`, `title`, `status` |
+| `sort_order` | `desc`       | `asc` / `desc`| Sort direction                       |
 
 **Response — 200 OK**
 
 ```json
-[
-  {
-    "id": 1,
-    "title": "Write documentation",
-    "description": "Add README examples",
-    "status": "in-progress",
-    "due_date": "2026-10-01",
-    "created_at": "2026-09-24T00:00:00.000000Z",
-    "updated_at": "2026-09-24T00:00:00.000000Z"
+{
+  "data": [
+    {
+      "id": 1,
+      "title": "Write documentation",
+      "description": "Add README examples",
+      "status": "in-progress",
+      "due_date": "2026-10-01",
+      "created_at": "2026-09-24T00:00:00.000000Z",
+      "updated_at": "2026-09-24T00:00:00.000000Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 47,
+    "total_pages": 5,
+    "has_next": true,
+    "has_previous": false
   }
-]
+}
 ```
 
-Returns `[]` when no tasks match.
+`total` reflects the number of tasks matching the filter, not the entire table.
+Returns `"data": []` with accurate pagination metadata when no tasks match.
 
 ### Get a task
 
@@ -274,6 +299,8 @@ curl -X DELETE http://127.0.0.1:8000/api/v1/tasks/1
 | Empty or whitespace-only title    | 422         | `title must not be empty or only whitespace`        |
 | Invalid status value              | 422         | Enum validation error for `status`                  |
 | Invalid date format               | 422         | Date parsing error for `due_date`                   |
+| Invalid `page` or `limit`         | 422         | Out-of-range pagination query parameter             |
+| Invalid `sort_by` or `sort_order` | 422         | Enum validation error                               |
 | Task not found                    | 404         | `Task with id {id} not found`                       |
 | Database error                    | 500         | `A database error occurred. Please try again later.`|
 
@@ -295,5 +322,56 @@ app/
 alembic/                    Migration environment and versions
 tests/
   conftest.py               Test database fixtures
-  test_tasks.py             API test suite
+  test_tasks.py             CRUD and validation tests
+  test_list_pagination.py   Pagination and sorting tests
 ```
+
+## Scaling to 1 Million Users
+
+This project is a focused assignment implementation: a single FastAPI service talking
+directly to PostgreSQL. It is **not** production-ready for one million users today.
+The current design is intentionally simple, but the architecture can evolve in
+clear stages as traffic and data grow.
+
+**Application layer.** The API is stateless — no session data is stored in memory
+between requests — so you can run multiple Uvicorn/Gunicorn workers behind a load
+balancer (AWS ALB, NGINX, etc.) and scale horizontally by adding instances when CPU
+or latency rises. Keep business logic in the service layer and avoid per-instance
+state so any worker can handle any request.
+
+**Database.** Move to a managed PostgreSQL service with automated backups, failover,
+and connection pooling (PgBouncer or the provider's pooler). The indexes on
+`status`, `due_date`, and `created_at` support common filter/sort patterns, but
+you would still monitor slow queries and adjust indexes based on real traffic. When
+read volume dominates, add read replicas for list endpoints while keeping writes on
+the primary. Table partitioning is a later step — only worth it when row counts and
+query patterns make maintenance or scan cost a measured problem, not upfront.
+
+**Caching.** Introduce Redis for data that is read often and changes infrequently
+(for example a cached task count or popular filtered views). Cache keys must include
+filter/sort parameters, and every create/update/delete must invalidate or update the
+relevant entries. Blind caching creates stale reads; explicit invalidation rules are
+part of the design.
+
+**Background processing.** Email reminders, exports, analytics, and other slow work
+should move to background workers (Celery/RQ or a managed queue) so API responses
+stay fast. The HTTP layer validates input, writes to PostgreSQL, enqueues work, and
+returns — it does not perform heavy computation inline.
+
+**Infrastructure sketch.** A realistic growth path looks like:
+
+```
+Client → Load Balancer → Multiple FastAPI instances → PostgreSQL (+ pooler)
+                                                     → Redis (cache)
+                                                     → Background workers (queue)
+```
+
+**Observability and security.** Production would add centralized logging, metrics
+(request latency, error rate, pool usage), health checks on each instance, and error
+tracking (Sentry, etc.) with alerting. Security layers include HTTPS termination,
+authentication/authorization, rate limiting at the gateway, and secrets stored in a
+manager rather than plain `.env` files on servers.
+
+The point is separation of concerns: the code you have now proves the domain logic
+works; reaching large scale means adding infrastructure around it — not rewriting
+the core API from scratch.

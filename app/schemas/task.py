@@ -1,3 +1,5 @@
+import enum
+import math
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -10,6 +12,19 @@ def _validate_title(value: str) -> str:
     if not stripped:
         raise ValueError("title must not be empty or only whitespace")
     return stripped
+
+
+class TaskSortField(str, enum.Enum):
+    CREATED_AT = "created_at"
+    UPDATED_AT = "updated_at"
+    DUE_DATE = "due_date"
+    TITLE = "title"
+    STATUS = "status"
+
+
+class SortOrder(str, enum.Enum):
+    ASC = "asc"
+    DESC = "desc"
 
 
 class TaskCreate(BaseModel):
@@ -50,3 +65,29 @@ class TaskRead(BaseModel):
     due_date: date | None
     created_at: datetime
     updated_at: datetime
+
+
+class PaginationMeta(BaseModel):
+    page: int
+    limit: int
+    total: int
+    total_pages: int
+    has_next: bool
+    has_previous: bool
+
+    @classmethod
+    def build(cls, *, page: int, limit: int, total: int) -> "PaginationMeta":
+        total_pages = math.ceil(total / limit) if total > 0 else 0
+        return cls(
+            page=page,
+            limit=limit,
+            total=total,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_previous=page > 1 and total > 0,
+        )
+
+
+class TaskListResponse(BaseModel):
+    data: list[TaskRead]
+    pagination: PaginationMeta

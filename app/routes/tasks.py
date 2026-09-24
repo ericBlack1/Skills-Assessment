@@ -5,7 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import TaskStatus
-from app.schemas.task import TaskCreate, TaskRead, TaskUpdate
+from app.schemas.task import (
+    SortOrder,
+    TaskCreate,
+    TaskListResponse,
+    TaskRead,
+    TaskSortField,
+    TaskUpdate,
+)
 from app.services import task_service
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -26,9 +33,12 @@ def create_task(payload: TaskCreate, db: DbSession) -> TaskRead:
 
 @router.get(
     "",
-    response_model=list[TaskRead],
+    response_model=TaskListResponse,
     summary="List tasks",
-    description="Return all tasks, optionally filtered by status.",
+    description=(
+        "Return a paginated list of tasks. Supports filtering by status, "
+        "sorting by whitelisted fields, and page/limit pagination."
+    ),
 )
 def list_tasks(
     db: DbSession,
@@ -39,8 +49,28 @@ def list_tasks(
             description="Filter tasks by status: todo, in-progress, or done.",
         ),
     ] = None,
-) -> list[TaskRead]:
-    return task_service.list_tasks(db, status=status_filter)
+    page: Annotated[int, Query(ge=1, description="Page number (starts at 1).")] = 1,
+    limit: Annotated[
+        int, Query(ge=1, le=100, description="Number of tasks per page (max 100).")
+    ] = 10,
+    sort_by: Annotated[
+        TaskSortField,
+        Query(description="Field to sort by."),
+    ] = TaskSortField.CREATED_AT,
+    sort_order: Annotated[
+        SortOrder,
+        Query(description="Sort direction: asc or desc."),
+    ] = SortOrder.DESC,
+) -> TaskListResponse:
+    tasks, pagination = task_service.list_tasks(
+        db,
+        status=status_filter,
+        page=page,
+        limit=limit,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    return TaskListResponse(data=tasks, pagination=pagination)
 
 
 @router.get(

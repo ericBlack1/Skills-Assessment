@@ -41,12 +41,13 @@ def test_list_tasks_returns_all_tasks(client: TestClient) -> None:
         json=create_payload(title="Second", status="in-progress"),
     )
 
-    response = client.get("/api/v1/tasks")
+    response = client.get("/api/v1/tasks", params={"limit": 100})
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 2
-    assert [task["title"] for task in body] == ["First", "Second"]
+    assert len(body["data"]) == 2
+    assert {task["title"] for task in body["data"]} == {"First", "Second"}
+    assert body["pagination"]["total"] == 2
 
 
 def test_get_task_returns_single_task(client: TestClient) -> None:
@@ -107,16 +108,19 @@ def test_list_tasks_filters_by_status(client: TestClient) -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body) == 1
-    assert body[0]["title"] == "Active task"
-    assert body[0]["status"] == "in-progress"
+    assert len(body["data"]) == 1
+    assert body["data"][0]["title"] == "Active task"
+    assert body["data"][0]["status"] == "in-progress"
+    assert body["pagination"]["total"] == 1
 
 
 def test_list_tasks_returns_empty_list_when_no_matches(client: TestClient) -> None:
     response = client.get("/api/v1/tasks", params={"status": "done"})
 
     assert response.status_code == 200
-    assert response.json() == []
+    body = response.json()
+    assert body["data"] == []
+    assert body["pagination"]["total"] == 0
 
 
 def test_create_task_rejects_missing_title(client: TestClient) -> None:
