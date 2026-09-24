@@ -1,8 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.errors import task_not_found
 from app.db.database import get_db
 from app.db.models import TaskStatus
 from app.schemas.task import (
@@ -82,10 +83,7 @@ def list_tasks(
 def get_task(task_id: int, db: DbSession) -> TaskRead:
     task = task_service.get_task(db, task_id)
     if task is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task with id {task_id} not found",
-        )
+        raise task_not_found()
     return task
 
 
@@ -98,10 +96,7 @@ def get_task(task_id: int, db: DbSession) -> TaskRead:
 def update_task(task_id: int, payload: TaskUpdate, db: DbSession) -> TaskRead:
     task = task_service.get_task(db, task_id)
     if task is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task with id {task_id} not found",
-        )
+        raise task_not_found()
     return task_service.update_task(db, task, payload)
 
 
@@ -114,8 +109,5 @@ def update_task(task_id: int, payload: TaskUpdate, db: DbSession) -> TaskRead:
 def delete_task(task_id: int, db: DbSession) -> None:
     task = task_service.get_task(db, task_id)
     if task is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Task with id {task_id} not found",
-        )
+        raise task_not_found()
     task_service.delete_task(db, task)

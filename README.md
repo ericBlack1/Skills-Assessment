@@ -14,7 +14,7 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 - Input validation with clear error messages
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
-- 28 automated API tests with isolated test database setup
+- 35 automated API tests with isolated test database setup
 - Docker and Docker Compose for local containerized runs
 - GitHub Actions CI pipeline
 
@@ -366,29 +366,65 @@ curl -X DELETE http://127.0.0.1:8000/api/v1/tasks/1
 
 **Response — 204 No Content** — empty body on success.
 
-## Validation and error behavior
+## Error handling
 
-| Situation                         | HTTP status | Example detail                                      |
-| --------------------------------- | ----------- | --------------------------------------------------- |
-| Missing required field            | 422         | Pydantic validation error listing the field         |
-| Empty or whitespace-only title    | 422         | `title must not be empty or only whitespace`        |
-| Invalid status value              | 422         | Enum validation error for `status`                  |
-| Invalid date format               | 422         | Date parsing error for `due_date`                   |
-| Invalid `page` or `limit`         | 422         | Out-of-range pagination query parameter             |
-| Invalid `sort_by` or `sort_order` | 422         | Enum validation error                               |
-| Task not found                    | 404         | `Task with id {id} not found`                       |
-| Database error                    | 500         | `A database error occurred. Please try again later.`|
+Error responses use a consistent JSON envelope. Successful responses are
+unchanged.
 
-Validation errors (422) return a JSON body with a `detail` array describing
-each failing field. Database errors are never exposed with raw SQL or stack
-traces.
+```json
+{
+  "success": false,
+  "statusCode": 404,
+  "message": "Task not found",
+  "data": null,
+  "error": {
+    "code": "TASK_NOT_FOUND",
+    "details": null
+  }
+}
+```
+
+Common error codes:
+
+| Situation | HTTP status | Code |
+| --------- | ----------- | ---- |
+| Validation failure (missing field, invalid status/date/pagination/sort) | 422 | `VALIDATION_ERROR` |
+| Task not found | 404 | `TASK_NOT_FOUND` |
+| Database failure | 500 | `DATABASE_ERROR` |
+| Unexpected application error | 500 | `INTERNAL_SERVER_ERROR` |
+
+Validation errors include field-level details:
+
+```json
+{
+  "success": false,
+  "statusCode": 422,
+  "message": "Validation failed",
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "details": [
+      {
+        "field": "title",
+        "message": "Field required",
+        "type": "missing"
+      }
+    ]
+  }
+}
+```
+
+Raw SQLAlchemy/PostgreSQL errors, stack traces, and internal implementation
+details are never returned to clients. The actual exception is logged
+server-side.
 
 ## Project structure
 
 ```
 app/
-  main.py                   Application entrypoint and error handlers
+  main.py                   Application entrypoint
   core/config.py            Environment-based settings
+  core/errors.py            Consistent API error responses and handlers
   db/database.py            Engine, session factory, get_db dependency
   db/models.py              SQLAlchemy Task model and TaskStatus enum
   schemas/task.py           Pydantic request/response schemas
@@ -399,6 +435,7 @@ tests/
   conftest.py               Test database fixtures
   test_tasks.py             CRUD and validation tests
   test_list_pagination.py   Pagination and sorting tests
+  test_errors.py            Error response format tests
 ```
 
 ## Scaling to 1 Million Users

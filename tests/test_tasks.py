@@ -136,7 +136,12 @@ def test_create_task_rejects_empty_title(client: TestClient) -> None:
     response = client.post("/api/v1/tasks", json=create_payload(title="   "))
 
     assert response.status_code == 422
-    assert "title must not be empty or only whitespace" in response.text
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert any(
+        "title must not be empty or only whitespace" in item["message"]
+        for item in body["error"]["details"]
+    )
 
 
 def test_create_task_rejects_invalid_status(client: TestClient) -> None:
@@ -158,21 +163,25 @@ def test_get_task_returns_404_for_missing_task(client: TestClient) -> None:
     response = client.get("/api/v1/tasks/999999")
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Task with id 999999 not found"
+    body = response.json()
+    assert body["error"]["code"] == "TASK_NOT_FOUND"
+    assert body["message"] == "Task not found"
 
 
 def test_update_task_returns_404_for_missing_task(client: TestClient) -> None:
     response = client.patch("/api/v1/tasks/999999", json={"title": "Nope"})
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Task with id 999999 not found"
+    body = response.json()
+    assert body["error"]["code"] == "TASK_NOT_FOUND"
 
 
 def test_delete_task_returns_404_for_missing_task(client: TestClient) -> None:
     response = client.delete("/api/v1/tasks/999999")
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Task with id 999999 not found"
+    body = response.json()
+    assert body["error"]["code"] == "TASK_NOT_FOUND"
 
 
 def test_create_task_rejects_missing_due_date(client: TestClient) -> None:
@@ -202,4 +211,9 @@ def test_update_task_rejects_whitespace_title(client: TestClient) -> None:
     )
 
     assert response.status_code == 422
-    assert "title must not be empty or only whitespace" in response.text
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert any(
+        "title must not be empty or only whitespace" in item["message"]
+        for item in body["error"]["details"]
+    )
