@@ -16,7 +16,7 @@ app.include_router(tasks.router, prefix="/api/v1")
 
 @app.exception_handler(SQLAlchemyError)
 async def sqlalchemy_exception_handler(
-    _request: Request, exc: SQLAlchemyError
+    _request: Request, _exc: SQLAlchemyError
 ) -> JSONResponse:
     logger.exception("Database error")
     return JSONResponse(

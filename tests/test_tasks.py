@@ -1,5 +1,4 @@
 from fastapi.testclient import TestClient
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Task
@@ -176,6 +175,15 @@ def test_create_task_rejects_missing_due_date(client: TestClient) -> None:
     response = client.post(
         "/api/v1/tasks",
         json={"title": "Missing due date", "description": "No date"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_task_rejects_invalid_due_date(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/tasks",
+        json=create_payload(due_date="not-a-date"),
     )
 
     assert response.status_code == 422
