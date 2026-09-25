@@ -49,10 +49,17 @@ class TaskUpdate(BaseModel):
 
     @field_validator("title")
     @classmethod
-    def validate_title(cls, value: str | None) -> str | None:
+    def validate_title(cls, value: str | None) -> str:
         if value is None:
-            return None
+            raise ValueError("title cannot be null")
         return _validate_title(value)
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: TaskStatus | None) -> TaskStatus:
+        if value is None:
+            raise ValueError("status cannot be null")
+        return value
 
 
 class TaskRead(BaseModel):
