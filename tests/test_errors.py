@@ -98,6 +98,47 @@ def test_database_error_returns_safe_500(client: TestClient, monkeypatch) -> Non
     assert "Traceback" not in response.text
 
 
+def test_patch_null_title_returns_422(client: TestClient) -> None:
+    created = client.post("/api/v1/tasks", json=create_payload(title="Patch target")).json()
+
+    response = client.patch(
+        f"/api/v1/tasks/{created['id']}",
+        json={"title": None},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert_error_shape(body, status_code=422, code="VALIDATION_ERROR")
+    assert any(item["field"] == "title" for item in body["error"]["details"])
+    assert "title cannot be null" in response.text
+    assert "DATABASE_ERROR" not in response.text
+
+
+def test_patch_null_status_returns_422(client: TestClient) -> None:
+    created = client.post("/api/v1/tasks", json=create_payload(title="Patch target")).json()
+
+    response = client.patch(
+        f"/api/v1/tasks/{created['id']}",
+        json={"status": None},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert_error_shape(body, status_code=422, code="VALIDATION_ERROR")
+    assert any(item["field"] == "status" for item in body["error"]["details"])
+    assert "status cannot be null" in response.text
+    assert "DATABASE_ERROR" not in response.text
+
+
+def test_patch_empty_body_still_works(client: TestClient) -> None:
+    created = client.post("/api/v1/tasks", json=create_payload(title="Unchanged")).json()
+
+    response = client.patch(f"/api/v1/tasks/{created['id']}", json={})
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Unchanged"
+
+
 def test_unexpected_error_returns_safe_500(client: TestClient, monkeypatch) -> None:
     def failing_get_task(*_args, **_kwargs):
         raise RuntimeError("something broke internally")
