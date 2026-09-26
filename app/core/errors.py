@@ -70,6 +70,24 @@ def invalid_credentials() -> APIError:
     )
 
 
+def unauthorized() -> APIError:
+    return APIError(
+        status_code=401,
+        message="Authentication required",
+        code="UNAUTHORIZED",
+        details=None,
+    )
+
+
+def invalid_token() -> APIError:
+    return APIError(
+        status_code=401,
+        message="Invalid or expired token",
+        code="INVALID_TOKEN",
+        details=None,
+    )
+
+
 def _format_validation_details(errors: list[dict[str, Any]]) -> list[dict[str, str]]:
     formatted: list[dict[str, str]] = []
     for error in errors:

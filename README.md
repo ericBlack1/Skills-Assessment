@@ -15,7 +15,7 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 - Input validation with clear error messages
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
-- 46 automated API tests with isolated test database setup
+- 49 automated API tests with isolated test database setup
 - Docker and Docker Compose for local containerized runs
 - GitHub Actions CI pipeline
 
@@ -247,8 +247,9 @@ Base path: `/api/v1`
 | PATCH  | `/api/v1/tasks/{id}`      | Partially update a task | 200          |
 | DELETE | `/api/v1/tasks/{id}`      | Delete a task           | 204          |
 
-Task endpoints are still public in this release; user-scoped task access will be
-added in a follow-up step.
+All task endpoints require a valid JWT in the `Authorization: Bearer <token>`
+header. Requests without a token return **401** `UNAUTHORIZED`; invalid or
+expired tokens return **401** `INVALID_TOKEN`.
 
 ### Task fields
 
@@ -315,10 +316,13 @@ Invalid credentials return **401** with code `INVALID_CREDENTIALS`.
 
 ### Create a task
 
+Obtain a token from register or login first, then pass it on every task request.
+
 **Request**
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/tasks \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Write documentation",
@@ -345,10 +349,12 @@ curl -X POST http://127.0.0.1:8000/api/v1/tasks \
 ### List tasks (filter, pagination, sorting)
 
 ```bash
-curl http://127.0.0.1:8000/api/v1/tasks
-curl "http://127.0.0.1:8000/api/v1/tasks?status=in-progress&page=2&limit=20"
-curl "http://127.0.0.1:8000/api/v1/tasks?sort_by=due_date&sort_order=asc"
-curl "http://127.0.0.1:8000/api/v1/tasks?status=todo&page=1&limit=20&sort_by=due_date&sort_order=asc"
+curl http://127.0.0.1:8000/api/v1/tasks \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+curl "http://127.0.0.1:8000/api/v1/tasks?status=in-progress&page=2&limit=20" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+curl "http://127.0.0.1:8000/api/v1/tasks?sort_by=due_date&sort_order=asc" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 Query parameters:

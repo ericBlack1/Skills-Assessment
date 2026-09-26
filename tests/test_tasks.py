@@ -1,7 +1,7 @@
-from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.db.models import Task
+from tests.conftest import AuthenticatedClient
 
 
 def create_payload(**overrides: object) -> dict[str, object]:
@@ -14,8 +14,8 @@ def create_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
-def test_create_task_success(client: TestClient, db_session: Session) -> None:
-    response = client.post("/api/v1/tasks", json=create_payload())
+def test_create_task_success(auth_client: AuthenticatedClient, db_session: Session) -> None:
+    response = auth_client.post("/api/v1/tasks", json=create_payload())
 
     assert response.status_code == 201
     body = response.json()
@@ -34,14 +34,14 @@ def test_create_task_success(client: TestClient, db_session: Session) -> None:
     assert stored.status.value == "todo"
 
 
-def test_list_tasks_returns_all_tasks(client: TestClient) -> None:
-    client.post("/api/v1/tasks", json=create_payload(title="First"))
-    client.post(
+def test_list_tasks_returns_all_tasks(auth_client: AuthenticatedClient) -> None:
+    auth_client.post("/api/v1/tasks", json=create_payload(title="First"))
+    auth_client.post(
         "/api/v1/tasks",
         json=create_payload(title="Second", status="in-progress"),
     )
 
-    response = client.get("/api/v1/tasks", params={"limit": 100})
+    response = auth_client.get("/api/v1/tasks", params={"limit": 100})
 
     assert response.status_code == 200
     body = response.json()
@@ -50,10 +50,10 @@ def test_list_tasks_returns_all_tasks(client: TestClient) -> None:
     assert body["pagination"]["total"] == 2
 
 
-def test_get_task_returns_single_task(client: TestClient) -> None:
-    created = client.post("/api/v1/tasks", json=create_payload(title="Fetch me")).json()
+def test_get_task_returns_single_task(auth_client: AuthenticatedClient) -> None:
+    created = auth_client.post("/api/v1/tasks", json=create_payload(title="Fetch me")).json()
 
-    response = client.get(f"/api/v1/tasks/{created['id']}")
+    response = auth_client.get(f"/api/v1/tasks/{created['id']}")
 
     assert response.status_code == 200
     body = response.json()
@@ -62,10 +62,10 @@ def test_get_task_returns_single_task(client: TestClient) -> None:
     assert body["status"] == "todo"
 
 
-def test_update_task_changes_fields(client: TestClient, db_session: Session) -> None:
-    created = client.post("/api/v1/tasks", json=create_payload(title="Before")).json()
+def test_update_task_changes_fields(auth_client: AuthenticatedClient, db_session: Session) -> None:
+    created = auth_client.post("/api/v1/tasks", json=create_payload(title="Before")).json()
 
-    response = client.patch(
+    response = auth_client.patch(
         f"/api/v1/tasks/{created['id']}",
         json={"title": "After", "status": "done"},
     )
@@ -82,29 +82,29 @@ def test_update_task_changes_fields(client: TestClient, db_session: Session) -> 
     assert stored.status.value == "done"
 
 
-def test_delete_task_removes_record(client: TestClient, db_session: Session) -> None:
-    created = client.post("/api/v1/tasks", json=create_payload(title="Delete me")).json()
+def test_delete_task_removes_record(auth_client: AuthenticatedClient, db_session: Session) -> None:
+    created = auth_client.post("/api/v1/tasks", json=create_payload(title="Delete me")).json()
 
-    response = client.delete(f"/api/v1/tasks/{created['id']}")
+    response = auth_client.delete(f"/api/v1/tasks/{created['id']}")
 
     assert response.status_code == 204
     assert response.content == b""
     assert db_session.get(Task, created["id"]) is None
-    assert client.get(f"/api/v1/tasks/{created['id']}").status_code == 404
+    assert auth_client.get(f"/api/v1/tasks/{created['id']}").status_code == 404
 
 
-def test_list_tasks_filters_by_status(client: TestClient) -> None:
-    client.post("/api/v1/tasks", json=create_payload(title="Todo task"))
-    client.post(
+def test_list_tasks_filters_by_status(auth_client: AuthenticatedClient) -> None:
+    auth_client.post("/api/v1/tasks", json=create_payload(title="Todo task"))
+    auth_client.post(
         "/api/v1/tasks",
         json=create_payload(title="Active task", status="in-progress"),
     )
-    client.post(
+    auth_client.post(
         "/api/v1/tasks",
         json=create_payload(title="Done task", status="done"),
     )
 
-    response = client.get("/api/v1/tasks", params={"status": "in-progress"})
+    response = auth_client.get("/api/v1/tasks", params={"status": "in-progress"})
 
     assert response.status_code == 200
     body = response.json()
@@ -114,8 +114,8 @@ def test_list_tasks_filters_by_status(client: TestClient) -> None:
     assert body["pagination"]["total"] == 1
 
 
-def test_list_tasks_returns_empty_list_when_no_matches(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"status": "done"})
+def test_list_tasks_returns_empty_list_when_no_matches(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"status": "done"})
 
     assert response.status_code == 200
     body = response.json()
@@ -123,8 +123,8 @@ def test_list_tasks_returns_empty_list_when_no_matches(client: TestClient) -> No
     assert body["pagination"]["total"] == 0
 
 
-def test_create_task_rejects_missing_title(client: TestClient) -> None:
-    response = client.post(
+def test_create_task_rejects_missing_title(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.post(
         "/api/v1/tasks",
         json={"description": "No title", "due_date": "2026-10-15"},
     )
@@ -132,8 +132,8 @@ def test_create_task_rejects_missing_title(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_create_task_rejects_empty_title(client: TestClient) -> None:
-    response = client.post("/api/v1/tasks", json=create_payload(title="   "))
+def test_create_task_rejects_empty_title(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.post("/api/v1/tasks", json=create_payload(title="   "))
 
     assert response.status_code == 422
     body = response.json()
@@ -144,8 +144,8 @@ def test_create_task_rejects_empty_title(client: TestClient) -> None:
     )
 
 
-def test_create_task_rejects_invalid_status(client: TestClient) -> None:
-    response = client.post(
+def test_create_task_rejects_invalid_status(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.post(
         "/api/v1/tasks",
         json=create_payload(status="blocked"),
     )
@@ -153,14 +153,14 @@ def test_create_task_rejects_invalid_status(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_list_tasks_rejects_invalid_status_filter(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"status": "invalid"})
+def test_list_tasks_rejects_invalid_status_filter(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"status": "invalid"})
 
     assert response.status_code == 422
 
 
-def test_get_task_returns_404_for_missing_task(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks/999999")
+def test_get_task_returns_404_for_missing_task(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks/999999")
 
     assert response.status_code == 404
     body = response.json()
@@ -168,24 +168,24 @@ def test_get_task_returns_404_for_missing_task(client: TestClient) -> None:
     assert body["message"] == "Task not found"
 
 
-def test_update_task_returns_404_for_missing_task(client: TestClient) -> None:
-    response = client.patch("/api/v1/tasks/999999", json={"title": "Nope"})
+def test_update_task_returns_404_for_missing_task(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.patch("/api/v1/tasks/999999", json={"title": "Nope"})
 
     assert response.status_code == 404
     body = response.json()
     assert body["error"]["code"] == "TASK_NOT_FOUND"
 
 
-def test_delete_task_returns_404_for_missing_task(client: TestClient) -> None:
-    response = client.delete("/api/v1/tasks/999999")
+def test_delete_task_returns_404_for_missing_task(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.delete("/api/v1/tasks/999999")
 
     assert response.status_code == 404
     body = response.json()
     assert body["error"]["code"] == "TASK_NOT_FOUND"
 
 
-def test_create_task_rejects_missing_due_date(client: TestClient) -> None:
-    response = client.post(
+def test_create_task_rejects_missing_due_date(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.post(
         "/api/v1/tasks",
         json={"title": "Missing due date", "description": "No date"},
     )
@@ -193,8 +193,8 @@ def test_create_task_rejects_missing_due_date(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_create_task_rejects_invalid_due_date(client: TestClient) -> None:
-    response = client.post(
+def test_create_task_rejects_invalid_due_date(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.post(
         "/api/v1/tasks",
         json=create_payload(due_date="not-a-date"),
     )
@@ -202,10 +202,10 @@ def test_create_task_rejects_invalid_due_date(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_update_task_rejects_whitespace_title(client: TestClient) -> None:
-    created = client.post("/api/v1/tasks", json=create_payload(title="Before")).json()
+def test_update_task_rejects_whitespace_title(auth_client: AuthenticatedClient) -> None:
+    created = auth_client.post("/api/v1/tasks", json=create_payload(title="Before")).json()
 
-    response = client.patch(
+    response = auth_client.patch(
         f"/api/v1/tasks/{created['id']}",
         json={"title": "   "},
     )

@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.deps import CurrentUser
 from app.core.errors import task_not_found
 from app.db.database import get_db
 from app.db.models import TaskStatus
@@ -28,7 +29,11 @@ DbSession = Annotated[Session, Depends(get_db)]
     summary="Create a task",
     description="Create a new task. Title and due_date are required; status defaults to todo.",
 )
-def create_task(payload: TaskCreate, db: DbSession) -> TaskRead:
+def create_task(
+    payload: TaskCreate,
+    db: DbSession,
+    _current_user: CurrentUser,
+) -> TaskRead:
     return task_service.create_task(db, payload)
 
 
@@ -43,6 +48,7 @@ def create_task(payload: TaskCreate, db: DbSession) -> TaskRead:
 )
 def list_tasks(
     db: DbSession,
+    _current_user: CurrentUser,
     status_filter: Annotated[
         TaskStatus | None,
         Query(
@@ -80,7 +86,7 @@ def list_tasks(
     summary="Get a task",
     description="Return a single task by ID.",
 )
-def get_task(task_id: int, db: DbSession) -> TaskRead:
+def get_task(task_id: int, db: DbSession, _current_user: CurrentUser) -> TaskRead:
     task = task_service.get_task(db, task_id)
     if task is None:
         raise task_not_found()
@@ -93,7 +99,12 @@ def get_task(task_id: int, db: DbSession) -> TaskRead:
     summary="Update a task",
     description="Partially update a task. Only supplied fields are changed.",
 )
-def update_task(task_id: int, payload: TaskUpdate, db: DbSession) -> TaskRead:
+def update_task(
+    task_id: int,
+    payload: TaskUpdate,
+    db: DbSession,
+    _current_user: CurrentUser,
+) -> TaskRead:
     task = task_service.get_task(db, task_id)
     if task is None:
         raise task_not_found()
@@ -106,7 +117,7 @@ def update_task(task_id: int, payload: TaskUpdate, db: DbSession) -> TaskRead:
     summary="Delete a task",
     description="Permanently delete a task by ID.",
 )
-def delete_task(task_id: int, db: DbSession) -> None:
+def delete_task(task_id: int, db: DbSession, _current_user: CurrentUser) -> None:
     task = task_service.get_task(db, task_id)
     if task is None:
         raise task_not_found()

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 import jwt
 from fastapi.testclient import TestClient
 
@@ -101,7 +103,42 @@ def test_login_unknown_email_returns_401(client: TestClient) -> None:
     assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
 
 
-def test_tasks_remain_public_in_step_one(client: TestClient) -> None:
-    """Step 1 does not protect task routes yet."""
+def test_tasks_require_authentication(client: TestClient) -> None:
     response = client.get("/api/v1/tasks")
+
+    assert response.status_code == 401
+    body = response.json()
+    assert body["error"]["code"] == "UNAUTHORIZED"
+    assert body["message"] == "Authentication required"
+
+
+def test_tasks_reject_invalid_token(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/tasks",
+        headers={"Authorization": "Bearer not-a-valid-token"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "INVALID_TOKEN"
+
+
+def test_tasks_reject_expired_token(client: TestClient) -> None:
+    expired_token = jwt.encode(
+        {"sub": "1", "exp": datetime.now(UTC) - timedelta(minutes=1)},
+        settings.jwt_secret,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    response = client.get(
+        "/api/v1/tasks",
+        headers={"Authorization": f"Bearer {expired_token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "INVALID_TOKEN"
+
+
+def test_tasks_accept_valid_token(client: TestClient, auth_headers: dict[str, str]) -> None:
+    response = client.get("/api/v1/tasks", headers=auth_headers)
+
     assert response.status_code == 200

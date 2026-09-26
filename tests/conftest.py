@@ -155,6 +155,50 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
+class AuthenticatedClient:
+    """Wraps TestClient and sends a Bearer token on every request."""
+
+    def __init__(self, client: TestClient, headers: dict[str, str]) -> None:
+        self._client = client
+        self._headers = headers
+
+    def _merge_headers(self, kwargs: dict[str, object]) -> dict[str, object]:
+        merged = dict(self._headers)
+        extra = kwargs.pop("headers", None)
+        if isinstance(extra, dict):
+            merged.update(extra)
+        kwargs["headers"] = merged
+        return kwargs
+
+    def get(self, url: str, **kwargs: object):
+        return self._client.get(url, **self._merge_headers(kwargs))
+
+    def post(self, url: str, **kwargs: object):
+        return self._client.post(url, **self._merge_headers(kwargs))
+
+    def patch(self, url: str, **kwargs: object):
+        return self._client.patch(url, **self._merge_headers(kwargs))
+
+    def delete(self, url: str, **kwargs: object):
+        return self._client.delete(url, **self._merge_headers(kwargs))
+
+
+@pytest.fixture
+def auth_headers(client: TestClient) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": "testuser@example.com", "password": "securepass123"},
+    )
+    assert response.status_code == 201
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def auth_client(client: TestClient, auth_headers: dict[str, str]) -> AuthenticatedClient:
+    return AuthenticatedClient(client, auth_headers)
+
+
 @pytest.fixture(autouse=True)
 def assert_clean_tables(db_session: Session) -> None:
     """Ensure each test starts with empty task and user tables."""

@@ -1,4 +1,4 @@
-from fastapi.testclient import TestClient
+from tests.conftest import AuthenticatedClient
 
 
 def create_payload(**overrides: object) -> dict[str, object]:
@@ -11,9 +11,9 @@ def create_payload(**overrides: object) -> dict[str, object]:
     return payload
 
 
-def seed_tasks(client: TestClient, count: int, **overrides: object) -> None:
+def seed_tasks(auth_client: AuthenticatedClient, count: int, **overrides: object) -> None:
     for index in range(count):
-        client.post(
+        auth_client.post(
             "/api/v1/tasks",
             json=create_payload(
                 title=f"Task {index:02d}",
@@ -23,10 +23,10 @@ def seed_tasks(client: TestClient, count: int, **overrides: object) -> None:
         )
 
 
-def test_list_tasks_default_pagination(client: TestClient) -> None:
-    seed_tasks(client, 12)
+def test_list_tasks_default_pagination(auth_client: AuthenticatedClient) -> None:
+    seed_tasks(auth_client, 12)
 
-    response = client.get("/api/v1/tasks")
+    response = auth_client.get("/api/v1/tasks")
 
     assert response.status_code == 200
     body = response.json()
@@ -41,10 +41,10 @@ def test_list_tasks_default_pagination(client: TestClient) -> None:
     }
 
 
-def test_list_tasks_custom_page_and_limit(client: TestClient) -> None:
-    seed_tasks(client, 25)
+def test_list_tasks_custom_page_and_limit(auth_client: AuthenticatedClient) -> None:
+    seed_tasks(auth_client, 25)
 
-    response = client.get("/api/v1/tasks", params={"page": 2, "limit": 20})
+    response = auth_client.get("/api/v1/tasks", params={"page": 2, "limit": 20})
 
     assert response.status_code == 200
     body = response.json()
@@ -57,24 +57,24 @@ def test_list_tasks_custom_page_and_limit(client: TestClient) -> None:
     assert body["pagination"]["has_previous"] is True
 
 
-def test_list_tasks_rejects_limit_above_maximum(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"limit": 101})
+def test_list_tasks_rejects_limit_above_maximum(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"limit": 101})
 
     assert response.status_code == 422
 
 
-def test_list_tasks_rejects_page_below_one(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"page": 0})
+def test_list_tasks_rejects_page_below_one(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"page": 0})
 
     assert response.status_code == 422
 
 
-def test_list_tasks_sorts_ascending_by_title(client: TestClient) -> None:
-    client.post("/api/v1/tasks", json=create_payload(title="Charlie", due_date="2026-10-03"))
-    client.post("/api/v1/tasks", json=create_payload(title="Alpha", due_date="2026-10-01"))
-    client.post("/api/v1/tasks", json=create_payload(title="Bravo", due_date="2026-10-02"))
+def test_list_tasks_sorts_ascending_by_title(auth_client: AuthenticatedClient) -> None:
+    auth_client.post("/api/v1/tasks", json=create_payload(title="Charlie", due_date="2026-10-03"))
+    auth_client.post("/api/v1/tasks", json=create_payload(title="Alpha", due_date="2026-10-01"))
+    auth_client.post("/api/v1/tasks", json=create_payload(title="Bravo", due_date="2026-10-02"))
 
-    response = client.get(
+    response = auth_client.get(
         "/api/v1/tasks",
         params={"sort_by": "title", "sort_order": "asc", "limit": 100},
     )
@@ -84,12 +84,12 @@ def test_list_tasks_sorts_ascending_by_title(client: TestClient) -> None:
     assert titles == ["Alpha", "Bravo", "Charlie"]
 
 
-def test_list_tasks_sorts_descending_by_due_date(client: TestClient) -> None:
-    client.post("/api/v1/tasks", json=create_payload(title="Early", due_date="2026-10-01"))
-    client.post("/api/v1/tasks", json=create_payload(title="Late", due_date="2026-10-31"))
-    client.post("/api/v1/tasks", json=create_payload(title="Mid", due_date="2026-10-15"))
+def test_list_tasks_sorts_descending_by_due_date(auth_client: AuthenticatedClient) -> None:
+    auth_client.post("/api/v1/tasks", json=create_payload(title="Early", due_date="2026-10-01"))
+    auth_client.post("/api/v1/tasks", json=create_payload(title="Late", due_date="2026-10-31"))
+    auth_client.post("/api/v1/tasks", json=create_payload(title="Mid", due_date="2026-10-15"))
 
-    response = client.get(
+    response = auth_client.get(
         "/api/v1/tasks",
         params={"sort_by": "due_date", "sort_order": "desc", "limit": 100},
     )
@@ -99,31 +99,31 @@ def test_list_tasks_sorts_descending_by_due_date(client: TestClient) -> None:
     assert titles == ["Late", "Mid", "Early"]
 
 
-def test_list_tasks_rejects_invalid_sort_field(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"sort_by": "id"})
+def test_list_tasks_rejects_invalid_sort_field(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"sort_by": "id"})
 
     assert response.status_code == 422
 
 
-def test_list_tasks_rejects_invalid_sort_order(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"sort_order": "sideways"})
+def test_list_tasks_rejects_invalid_sort_order(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"sort_order": "sideways"})
 
     assert response.status_code == 422
 
 
-def test_list_tasks_pagination_with_status_filter(client: TestClient) -> None:
+def test_list_tasks_pagination_with_status_filter(auth_client: AuthenticatedClient) -> None:
     for index in range(5):
-        client.post(
+        auth_client.post(
             "/api/v1/tasks",
             json=create_payload(title=f"Todo {index:02d}", status="todo"),
         )
     for index in range(3):
-        client.post(
+        auth_client.post(
             "/api/v1/tasks",
             json=create_payload(title=f"Active {index:02d}", status="in-progress"),
         )
 
-    response = client.get(
+    response = auth_client.get(
         "/api/v1/tasks",
         params={"status": "todo", "page": 2, "limit": 2, "sort_by": "title", "sort_order": "asc"},
     )
@@ -137,10 +137,10 @@ def test_list_tasks_pagination_with_status_filter(client: TestClient) -> None:
     assert body["data"][0]["title"] == "Todo 02"
 
 
-def test_list_tasks_returns_empty_page_with_metadata(client: TestClient) -> None:
-    seed_tasks(client, 3)
+def test_list_tasks_returns_empty_page_with_metadata(auth_client: AuthenticatedClient) -> None:
+    seed_tasks(auth_client, 3)
 
-    response = client.get("/api/v1/tasks", params={"page": 5, "limit": 10})
+    response = auth_client.get("/api/v1/tasks", params={"page": 5, "limit": 10})
 
     assert response.status_code == 200
     body = response.json()
@@ -155,8 +155,8 @@ def test_list_tasks_returns_empty_page_with_metadata(client: TestClient) -> None
     }
 
 
-def test_list_tasks_returns_empty_result_with_zero_total(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"status": "done"})
+def test_list_tasks_returns_empty_result_with_zero_total(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"status": "done"})
 
     assert response.status_code == 200
     body = response.json()
