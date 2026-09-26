@@ -7,6 +7,7 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 
 ## Features
 
+- User registration and login with JWT access tokens
 - Full CRUD for tasks (create, list, get, update, delete)
 - Filter tasks by status (`todo`, `in-progress`, `done`)
 - Paginated list responses with metadata (`page`, `limit`, `total`, etc.)
@@ -14,7 +15,7 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 - Input validation with clear error messages
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
-- 35 automated API tests with isolated test database setup
+- 46 automated API tests with isolated test database setup
 - Docker and Docker Compose for local containerized runs
 - GitHub Actions CI pipeline
 
@@ -80,13 +81,16 @@ automatically. No credentials are hardcoded in the source code.
 
 ## Environment variables
 
-| Variable            | Required | Default              | Description                          |
-| ------------------- | -------- | -------------------- | ------------------------------------ |
-| `DATABASE_URL`      | Yes      | —                    | PostgreSQL connection string         |
-| `APP_NAME`          | No       | `Task Manager API`   | API title shown in OpenAPI docs      |
-| `APP_VERSION`       | No       | `0.1.0`              | API version                          |
-| `DEBUG`             | No       | `false`              | When `true`, log SQL statements      |
-| `TEST_DATABASE_URL` | No       | —                    | Dedicated database for pytest only   |
+| Variable              | Required | Default              | Description                          |
+| --------------------- | -------- | -------------------- | ------------------------------------ |
+| `DATABASE_URL`        | Yes      | —                    | PostgreSQL connection string         |
+| `JWT_SECRET`          | Yes      | —                    | Secret key for signing JWTs          |
+| `JWT_ALGORITHM`       | No       | `HS256`              | JWT signing algorithm                |
+| `JWT_EXPIRE_MINUTES`  | No       | `60`                 | Access token lifetime in minutes     |
+| `APP_NAME`            | No       | `Task Manager API`   | API title shown in OpenAPI docs      |
+| `APP_VERSION`         | No       | `0.1.0`              | API version                          |
+| `DEBUG`               | No       | `false`              | When `true`, log SQL statements      |
+| `TEST_DATABASE_URL`   | No       | —                    | Dedicated database for pytest only   |
 
 Settings are loaded from environment variables and an optional `.env` file in
 the project root (`app/core/config.py`).
@@ -233,13 +237,18 @@ fails if any test fails.
 
 Base path: `/api/v1`
 
-| Method | Path                   | Description             | Success code |
-| ------ | ---------------------- | ----------------------- | ------------ |
-| POST   | `/api/v1/tasks`        | Create a task           | 201          |
-| GET    | `/api/v1/tasks`        | List tasks (paginated)  | 200          |
-| GET    | `/api/v1/tasks/{id}`   | Get one task            | 200          |
-| PATCH  | `/api/v1/tasks/{id}`   | Partially update a task | 200          |
-| DELETE | `/api/v1/tasks/{id}`   | Delete a task           | 204          |
+| Method | Path                      | Description             | Success code |
+| ------ | ------------------------- | ----------------------- | ------------ |
+| POST   | `/api/v1/auth/register`   | Create a user account   | 201          |
+| POST   | `/api/v1/auth/login`      | Log in and receive JWT  | 200          |
+| POST   | `/api/v1/tasks`           | Create a task           | 201          |
+| GET    | `/api/v1/tasks`           | List tasks (paginated)  | 200          |
+| GET    | `/api/v1/tasks/{id}`      | Get one task            | 200          |
+| PATCH  | `/api/v1/tasks/{id}`      | Partially update a task | 200          |
+| DELETE | `/api/v1/tasks/{id}`      | Delete a task           | 204          |
+
+Task endpoints are still public in this release; user-scoped task access will be
+added in a follow-up step.
 
 ### Task fields
 
@@ -254,6 +263,55 @@ Base path: `/api/v1`
 | `updated_at`  | datetime (UTC)                    | —      | —      | Updated on write         |
 
 ## Example requests and responses
+
+### Register a user
+
+**Request**
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "securepass123"
+  }'
+```
+
+**Response (201)**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+Duplicate email returns **409** with code `EMAIL_ALREADY_REGISTERED`. Invalid
+input (bad email format, password shorter than 8 characters) returns **422**.
+
+### Log in
+
+**Request**
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "securepass123"
+  }'
+```
+
+**Response (200)**
+
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer"
+}
+```
+
+Invalid credentials return **401** with code `INVALID_CREDENTIALS`.
 
 ### Create a task
 

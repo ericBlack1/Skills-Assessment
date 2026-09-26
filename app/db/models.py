@@ -13,6 +13,28 @@ class TaskStatus(str, enum.Enum):
     DONE = "done"
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    def __repr__(self) -> str:
+        return f"<User id={self.id} email={self.email!r}>"
+
+
 class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (

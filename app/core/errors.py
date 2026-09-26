@@ -52,6 +52,24 @@ def task_not_found() -> APIError:
     )
 
 
+def email_already_registered() -> APIError:
+    return APIError(
+        status_code=409,
+        message="Email already registered",
+        code="EMAIL_ALREADY_REGISTERED",
+        details=None,
+    )
+
+
+def invalid_credentials() -> APIError:
+    return APIError(
+        status_code=401,
+        message="Invalid email or password",
+        code="INVALID_CREDENTIALS",
+        details=None,
+    )
+
+
 def _format_validation_details(errors: list[dict[str, Any]]) -> list[dict[str, str]]:
     formatted: list[dict[str, str]] = []
     for error in errors:

@@ -2,6 +2,12 @@ import os
 import subprocess
 import time
 from collections.abc import Generator
+
+# Set auth env vars before application settings are loaded.
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest-only")
+os.environ.setdefault("JWT_ALGORITHM", "HS256")
+os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -9,7 +15,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.database import Base, get_db
-from app.db.models import Task
+from app.db.models import Task, User
 from app.main import app
 
 TEST_CONTAINER_NAME = "taskmanager-test-pg"
@@ -150,6 +156,7 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(autouse=True)
-def assert_clean_task_table(db_session: Session) -> None:
-    """Ensure each test starts with an empty tasks table."""
+def assert_clean_tables(db_session: Session) -> None:
+    """Ensure each test starts with empty task and user tables."""
     assert db_session.scalars(select(Task)).all() == []
+    assert db_session.scalars(select(User)).all() == []

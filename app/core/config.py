@@ -17,6 +17,10 @@ class Settings(BaseSettings):
 
     database_url: str
 
+    jwt_secret: str
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60
+
     @field_validator("database_url")
     @classmethod
     def require_psycopg_driver(cls, value: str) -> str:
