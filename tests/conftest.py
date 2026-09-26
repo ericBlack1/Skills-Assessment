@@ -2,6 +2,12 @@ import os
 import subprocess
 import time
 from collections.abc import Generator
+
+# Set auth env vars before application settings are loaded.
+os.environ.setdefault("JWT_SECRET", "test-jwt-secret-for-pytest-only")
+os.environ.setdefault("JWT_ALGORITHM", "HS256")
+os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
@@ -9,7 +15,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.database import Base, get_db
-from app.db.models import Task
+from app.db.models import Task, User
 from app.main import app
 
 TEST_CONTAINER_NAME = "taskmanager-test-pg"
@@ -149,7 +155,67 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
+class AuthenticatedClient:
+    """Wraps TestClient and sends a Bearer token on every request."""
+
+    def __init__(self, client: TestClient, headers: dict[str, str]) -> None:
+        self._client = client
+        self._headers = headers
+
+    def _merge_headers(self, kwargs: dict[str, object]) -> dict[str, object]:
+        merged = dict(self._headers)
+        extra = kwargs.pop("headers", None)
+        if isinstance(extra, dict):
+            merged.update(extra)
+        kwargs["headers"] = merged
+        return kwargs
+
+    def get(self, url: str, **kwargs: object):
+        return self._client.get(url, **self._merge_headers(kwargs))
+
+    def post(self, url: str, **kwargs: object):
+        return self._client.post(url, **self._merge_headers(kwargs))
+
+    def patch(self, url: str, **kwargs: object):
+        return self._client.patch(url, **self._merge_headers(kwargs))
+
+    def delete(self, url: str, **kwargs: object):
+        return self._client.delete(url, **self._merge_headers(kwargs))
+
+
+def register_auth_headers(
+    client: TestClient,
+    *,
+    email: str,
+    password: str = "securepass123",
+) -> dict[str, str]:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": password},
+    )
+    assert response.status_code == 201
+    token = response.json()["data"]["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def auth_headers(client: TestClient) -> dict[str, str]:
+    return register_auth_headers(client, email="testuser@example.com")
+
+
+@pytest.fixture
+def auth_client(client: TestClient, auth_headers: dict[str, str]) -> AuthenticatedClient:
+    return AuthenticatedClient(client, auth_headers)
+
+
+@pytest.fixture
+def other_auth_client(client: TestClient) -> AuthenticatedClient:
+    headers = register_auth_headers(client, email="otheruser@example.com")
+    return AuthenticatedClient(client, headers)
+
+
 @pytest.fixture(autouse=True)
-def assert_clean_task_table(db_session: Session) -> None:
-    """Ensure each test starts with an empty tasks table."""
+def assert_clean_tables(db_session: Session) -> None:
+    """Ensure each test starts with empty task and user tables."""
     assert db_session.scalars(select(Task)).all() == []
+    assert db_session.scalars(select(User)).all() == []

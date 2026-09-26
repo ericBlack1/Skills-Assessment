@@ -27,6 +27,9 @@ services:
       APP_VERSION: ${APP_VERSION:-0.1.0}
       DEBUG: ${DEBUG:-false}
       DATABASE_URL: postgresql://${POSTGRES_USER:-taskmanager}:${POSTGRES_PASSWORD:-taskmanager_dev_password}@db:5432/${POSTGRES_DB:-taskmanager}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-me}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-60}
     depends_on:
       db:
         condition: service_healthy

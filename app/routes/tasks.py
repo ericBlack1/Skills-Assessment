@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.deps import CurrentUser
 from app.core.errors import task_not_found
 from app.db.database import get_db
 from app.db.models import TaskStatus
@@ -28,8 +29,12 @@ DbSession = Annotated[Session, Depends(get_db)]
     summary="Create a task",
     description="Create a new task. Title and due_date are required; status defaults to todo.",
 )
-def create_task(payload: TaskCreate, db: DbSession) -> TaskRead:
-    return task_service.create_task(db, payload)
+def create_task(
+    payload: TaskCreate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> TaskRead:
+    return task_service.create_task(db, payload, user_id=current_user.id)
 
 
 @router.get(
@@ -37,12 +42,13 @@ def create_task(payload: TaskCreate, db: DbSession) -> TaskRead:
     response_model=TaskListResponse,
     summary="List tasks",
     description=(
-        "Return a paginated list of tasks. Supports filtering by status, "
-        "sorting by whitelisted fields, and page/limit pagination."
+        "Return a paginated list of the authenticated user's tasks. Supports "
+        "filtering by status, sorting by whitelisted fields, and page/limit pagination."
     ),
 )
 def list_tasks(
     db: DbSession,
+    current_user: CurrentUser,
     status_filter: Annotated[
         TaskStatus | None,
         Query(
@@ -65,6 +71,7 @@ def list_tasks(
 ) -> TaskListResponse:
     tasks, pagination = task_service.list_tasks(
         db,
+        user_id=current_user.id,
         status=status_filter,
         page=page,
         limit=limit,
@@ -78,10 +85,10 @@ def list_tasks(
     "/{task_id}",
     response_model=TaskRead,
     summary="Get a task",
-    description="Return a single task by ID.",
+    description="Return a single task by ID for the authenticated user.",
 )
-def get_task(task_id: int, db: DbSession) -> TaskRead:
-    task = task_service.get_task(db, task_id)
+def get_task(task_id: int, db: DbSession, current_user: CurrentUser) -> TaskRead:
+    task = task_service.get_task(db, task_id, user_id=current_user.id)
     if task is None:
         raise task_not_found()
     return task
@@ -93,8 +100,13 @@ def get_task(task_id: int, db: DbSession) -> TaskRead:
     summary="Update a task",
     description="Partially update a task. Only supplied fields are changed.",
 )
-def update_task(task_id: int, payload: TaskUpdate, db: DbSession) -> TaskRead:
-    task = task_service.get_task(db, task_id)
+def update_task(
+    task_id: int,
+    payload: TaskUpdate,
+    db: DbSession,
+    current_user: CurrentUser,
+) -> TaskRead:
+    task = task_service.get_task(db, task_id, user_id=current_user.id)
     if task is None:
         raise task_not_found()
     return task_service.update_task(db, task, payload)
@@ -106,8 +118,8 @@ def update_task(task_id: int, payload: TaskUpdate, db: DbSession) -> TaskRead:
     summary="Delete a task",
     description="Permanently delete a task by ID.",
 )
-def delete_task(task_id: int, db: DbSession) -> None:
-    task = task_service.get_task(db, task_id)
+def delete_task(task_id: int, db: DbSession, current_user: CurrentUser) -> None:
+    task = task_service.get_task(db, task_id, user_id=current_user.id)
     if task is None:
         raise task_not_found()
     task_service.delete_task(db, task)
