@@ -15,7 +15,7 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 - Input validation with clear error messages
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
-- 54 automated API tests with isolated test database setup
+- 69 automated API tests with isolated test database setup
 - Docker and Docker Compose for local containerized runs
 - GitHub Actions CI pipeline
 
