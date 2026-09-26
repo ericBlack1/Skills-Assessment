@@ -33,15 +33,19 @@ def test_register_returns_201_and_jwt(client: TestClient, db_session: Session) -
 
     assert response.status_code == 201
     body = response.json()
-    assert body["token_type"] == "bearer"
-    assert isinstance(body["access_token"], str)
-    assert len(body["access_token"]) > 0
+    assert body["success"] is True
+    assert body["message"] == "Registration successful"
+    assert body["metadata"] is None
+    assert body["data"]["token_type"] == "Bearer"
+    assert body["data"]["expires_in"] == settings.jwt_expire_minutes * 60
+    assert isinstance(body["data"]["access_token"], str)
+    assert len(body["data"]["access_token"]) > 0
 
     user = db_session.scalar(select(User).where(User.email == "user@example.com"))
     assert user is not None
 
     decoded = jwt.decode(
-        body["access_token"],
+        body["data"]["access_token"],
         settings.jwt_secret,
         algorithms=[settings.jwt_algorithm],
     )
@@ -116,8 +120,12 @@ def test_login_returns_jwt(client: TestClient) -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["token_type"] == "bearer"
-    assert isinstance(body["access_token"], str)
+    assert body["success"] is True
+    assert body["message"] == "Login successful"
+    assert body["metadata"] is None
+    assert body["data"]["token_type"] == "Bearer"
+    assert body["data"]["expires_in"] == settings.jwt_expire_minutes * 60
+    assert isinstance(body["data"]["access_token"], str)
 
 
 def test_login_accepts_email_case_insensitively(client: TestClient) -> None:
@@ -129,7 +137,9 @@ def test_login_accepts_email_case_insensitively(client: TestClient) -> None:
     )
 
     assert response.status_code == 200
-    assert "access_token" in response.json()
+    body = response.json()
+    assert body["success"] is True
+    assert "access_token" in body["data"]
 
 
 def test_login_invalid_password_returns_401(client: TestClient) -> None:
@@ -158,7 +168,7 @@ def test_login_unknown_email_returns_401(client: TestClient) -> None:
 
 def test_register_token_can_create_task(client: TestClient) -> None:
     register_response = client.post("/api/v1/auth/register", json=register_payload())
-    token = register_response.json()["access_token"]
+    token = register_response.json()["data"]["access_token"]
 
     response = client.post(
         "/api/v1/tasks",

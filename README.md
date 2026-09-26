@@ -286,10 +286,19 @@ curl -X POST http://127.0.0.1:8000/api/v1/auth/register \
 
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
+  "success": true,
+  "message": "Registration successful",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "Bearer",
+    "expires_in": 3600
+  },
+  "metadata": null
 }
 ```
+
+Token fields in `data` follow the [OAuth 2.0 access token](https://datatracker.ietf.org/doc/html/rfc6749#section-5.1)
+shape (`access_token`, `token_type`, `expires_in` in seconds).
 
 Duplicate email returns **409** with code `EMAIL_ALREADY_REGISTERED`. Invalid
 input (bad email format, password shorter than 8 characters) returns **422**.
@@ -311,8 +320,14 @@ curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
 
 ```json
 {
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
+  "success": true,
+  "message": "Login successful",
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "token_type": "Bearer",
+    "expires_in": 3600
+  },
+  "metadata": null
 }
 ```
 

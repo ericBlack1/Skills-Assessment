@@ -194,7 +194,7 @@ def register_auth_headers(
         json={"email": email, "password": password},
     )
     assert response.status_code == 201
-    token = response.json()["access_token"]
+    token = response.json()["data"]["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
