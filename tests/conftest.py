@@ -183,11 +183,15 @@ class AuthenticatedClient:
         return self._client.delete(url, **self._merge_headers(kwargs))
 
 
-@pytest.fixture
-def auth_headers(client: TestClient) -> dict[str, str]:
+def register_auth_headers(
+    client: TestClient,
+    *,
+    email: str,
+    password: str = "securepass123",
+) -> dict[str, str]:
     response = client.post(
         "/api/v1/auth/register",
-        json={"email": "testuser@example.com", "password": "securepass123"},
+        json={"email": email, "password": password},
     )
     assert response.status_code == 201
     token = response.json()["access_token"]
@@ -195,8 +199,19 @@ def auth_headers(client: TestClient) -> dict[str, str]:
 
 
 @pytest.fixture
+def auth_headers(client: TestClient) -> dict[str, str]:
+    return register_auth_headers(client, email="testuser@example.com")
+
+
+@pytest.fixture
 def auth_client(client: TestClient, auth_headers: dict[str, str]) -> AuthenticatedClient:
     return AuthenticatedClient(client, auth_headers)
+
+
+@pytest.fixture
+def other_auth_client(client: TestClient) -> AuthenticatedClient:
+    headers = register_auth_headers(client, email="otheruser@example.com")
+    return AuthenticatedClient(client, headers)
 
 
 @pytest.fixture(autouse=True)

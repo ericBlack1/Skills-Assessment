@@ -1,6 +1,7 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Task
+from app.db.models import Task, User
 from tests.conftest import AuthenticatedClient
 
 
@@ -32,6 +33,11 @@ def test_create_task_success(auth_client: AuthenticatedClient, db_session: Sessi
     assert stored is not None
     assert stored.title == "Write tests"
     assert stored.status.value == "todo"
+    owner = db_session.scalar(
+        select(User).where(User.email == "testuser@example.com")
+    )
+    assert owner is not None
+    assert stored.user_id == owner.id
 
 
 def test_list_tasks_returns_all_tasks(auth_client: AuthenticatedClient) -> None:

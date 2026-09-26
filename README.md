@@ -15,7 +15,7 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 - Input validation with clear error messages
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
-- 49 automated API tests with isolated test database setup
+- 54 automated API tests with isolated test database setup
 - Docker and Docker Compose for local containerized runs
 - GitHub Actions CI pipeline
 
@@ -112,6 +112,9 @@ alembic check                                # detect model/schema drift
 alembic revision --autogenerate -m "message" # create a new migration
 alembic downgrade -1                         # roll back one migration
 ```
+
+The `add user_id to tasks` migration removes any existing tasks that have no
+owner, because ownership cannot be inferred for legacy rows.
 
 ## Starting the API
 
@@ -249,7 +252,8 @@ Base path: `/api/v1`
 
 All task endpoints require a valid JWT in the `Authorization: Bearer <token>`
 header. Requests without a token return **401** `UNAUTHORIZED`; invalid or
-expired tokens return **401** `INVALID_TOKEN`.
+expired tokens return **401** `INVALID_TOKEN`. Each user can only access their
+own tasks — accessing another user's task by ID returns **404** `TASK_NOT_FOUND`.
 
 ### Task fields
 

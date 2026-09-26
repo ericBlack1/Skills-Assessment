@@ -1,7 +1,7 @@
 import enum
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, Index, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -38,12 +38,14 @@ class User(Base):
 class Task(Base):
     __tablename__ = "tasks"
     __table_args__ = (
+        Index("ix_tasks_user_id", "user_id"),
         Index("ix_tasks_status", "status"),
         Index("ix_tasks_due_date", "due_date"),
         Index("ix_tasks_created_at", "created_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(
