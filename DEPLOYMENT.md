@@ -1,9 +1,9 @@
 # Deployment runbook (Render + Neon)
 
-This document describes the **manual** production deployment for the Task Manager
-API. The **API runs on Render** (Docker web service); the **database is Neon**
-(managed PostgreSQL). Automated deploys from GitHub Actions are planned in
-**TM-4** — keep **Auto-Deploy** disabled until that work lands.
+This document describes production deployment for the Task Manager API. The
+**API runs on Render** (Docker web service); the **database is Neon** (managed
+PostgreSQL). Merges to **`main`** trigger an automated deploy via GitHub Actions
+after CI passes (`.github/workflows/deploy.yml`).
 
 ## Platform choices
 
@@ -30,7 +30,8 @@ works on the **free tier** where pre-deploy commands require a paid instance.
 
 - Render account
 - Neon project with a PostgreSQL database (connection string from the Neon dashboard)
-- GitHub repository access (to connect the repo once; deploys are manual for now)
+- GitHub repository with Actions enabled
+- Render web service connected to the repo (see setup below)
 - Local tools optional: `curl`, `jq`
 
 ## One-time setup
@@ -73,13 +74,16 @@ alembic upgrade head
 | **Dockerfile path** | `./Dockerfile` |
 | **Instance type** | Free or paid (free tier sleeps after inactivity) |
 
-4. **Important:** under **Settings → Build & Deploy**, set **Auto-Deploy** to
-   **No** until TM-4 enables CI/CD. Use **Manual Deploy** for each release.
+4. Under **Settings → Build & Deploy**, set **Auto-Deploy** to **No**. Deploys
+   are triggered by GitHub Actions (deploy hook), not by Render on every git push.
 
-5. Leave **Pre-Deploy Command** empty — migrations run automatically via
+5. Copy the **Deploy Hook** URL (**Settings → Deploy Hook → Create deploy hook**).
+   Add it as the GitHub secret `RENDER_DEPLOY_HOOK_URL` (see step 4 below).
+
+6. Leave **Pre-Deploy Command** empty — migrations run automatically via
    `scripts/start-production.sh` when the container starts (free-tier compatible).
 
-6. Set **Health Check Path**: `/health`
+7. Set **Health Check Path**: `/health`
 
 The health endpoint verifies Neon connectivity, not just process liveness.
 
@@ -102,15 +106,39 @@ Render injects `PORT` automatically; the start script binds to it.
 **Never** commit real values for `DATABASE_URL` or `JWT_SECRET`. `.env.example`
 contains placeholders only.
 
-### 4. First deploy
+### 4. GitHub Actions secrets
 
-1. Click **Manual Deploy → Deploy latest commit**.
-2. Watch build logs until you see `Running database migrations...` and
+In the GitHub repository: **Settings → Secrets and variables → Actions → New
+repository secret**.
+
+| Secret name | Value | Notes |
+| ----------- | ----- | ----- |
+| `RENDER_DEPLOY_HOOK_URL` | Full deploy hook URL from Render | Triggers production deploy |
+| `RENDER_SERVICE_URL` | Public service URL, e.g. `https://task-manager-api.onrender.com` | Used for post-deploy health check |
+
+`DATABASE_URL` and `JWT_SECRET` stay in **Render environment variables only** —
+they are not needed in GitHub Actions.
+
+### 5. First deploy
+
+**Option A — GitHub Actions (normal flow after setup)**
+
+1. Merge to `main` (CI must pass first).
+2. The **Deploy** workflow triggers Render via deploy hook and waits for `/health`.
+3. Check **Actions → Deploy** in GitHub for status.
+
+**Option B — Manual (fallback)**
+
+1. Render dashboard → **Manual Deploy → Deploy latest commit**.
+2. Watch logs until you see `Running database migrations...` and
    `Starting API server...`.
-3. Note the public URL (e.g. `https://task-manager-api.onrender.com`).
+
+Note your public URL (e.g. `https://task-manager-api.onrender.com`) and ensure it
+matches `RENDER_SERVICE_URL`.
 
 Free-tier Render services may take 30–60 seconds to wake after idle sleep. Neon
 free tier may also scale to zero; the first request after idle can be slower.
+Deploy + health polling may take several minutes on free tier.
 
 ## Verify the live API
 
@@ -150,12 +178,21 @@ curl -s "$API_URL/api/v1/tasks" \
 Redeploy the Render web service and repeat the list call to confirm data persists
 in Neon (not container storage).
 
-## Subsequent manual releases
+## Subsequent releases
 
-1. Merge or commit changes to the deployed branch.
-2. In Render: **Manual Deploy → Deploy latest commit**.
-3. Container startup runs `alembic upgrade head` automatically against Neon.
-4. Confirm `/health` and a smoke test against `/api/v1/tasks`.
+**Automated (default):**
+
+1. Open a PR → CI runs (ruff, tests, Docker build).
+2. Merge to `main` → CI runs again → **Deploy** workflow triggers Render.
+3. Deploy workflow waits for live `/health` to return `{"status":"ok"}`.
+
+**Manual fallback:**
+
+1. Render dashboard → **Manual Deploy → Deploy latest commit**.
+2. Confirm `/health` and a smoke test against `/api/v1/tasks`.
+
+Container startup runs `alembic upgrade head` automatically against Neon on
+every deploy.
 
 ## Logs and troubleshooting
 
@@ -168,8 +205,11 @@ in Neon (not container storage).
 | 401 on tasks | Register/login first; pass `Authorization: Bearer <token>` |
 | 500 on register/login | Password max 72 characters (bcrypt limit); check application logs |
 | Slow first request | Neon or Render free tier waking from idle |
+| Deploy workflow fails at health check | Render still building; increase wait or check Render logs; verify `RENDER_SERVICE_URL` |
+| Deploy workflow fails at curl | `RENDER_DEPLOY_HOOK_URL` missing or invalid |
 
-View logs: Render web service → **Logs** tab (runtime and deploy).
+View logs: Render web service → **Logs** tab (runtime and deploy). GitHub Actions
+→ **Deploy** workflow for trigger and health-check output.
 
 ## Rollback
 
@@ -196,8 +236,11 @@ two databases and to reuse the existing development database.
 - Secrets live in Render environment variables only, not in the Docker image or
   git history. Neon credentials stay in the Neon console and Render env vars.
 
-## Out of scope (TM-4)
+## CI/CD overview
 
-- GitHub Actions deploy workflow
-- Auto-deploy on push to `main`
-- Lint/format gates in CI beyond current test job
+| Workflow | Trigger | Purpose |
+| -------- | ------- | ------- |
+| `ci.yml` | push, pull_request | ruff lint, pytest, Docker build |
+| `deploy.yml` | CI success on `main` | Trigger Render deploy + verify `/health` |
+
+Keep Render **Auto-Deploy** off; GitHub Actions owns production deploys.
