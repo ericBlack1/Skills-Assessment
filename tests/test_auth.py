@@ -97,6 +97,28 @@ def test_register_rejects_short_password(client: TestClient) -> None:
     assert any(item["field"] == "password" for item in body["error"]["details"])
 
 
+def test_register_rejects_password_longer_than_72_characters(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json=register_payload(password="a" * 73),
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert any(item["field"] == "password" for item in body["error"]["details"])
+
+
+def test_register_accepts_password_at_72_character_limit(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json=register_payload(password="a" * 72),
+    )
+
+    assert response.status_code == 201
+    assert response.json()["success"] is True
+
+
 def test_register_stores_hashed_password_not_plaintext(
     client: TestClient,
     db_session: Session,
