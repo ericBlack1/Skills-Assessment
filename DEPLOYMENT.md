@@ -20,8 +20,11 @@ managed-database requirement.
 ```
 Internet → Render Web Service (Docker) → Neon PostgreSQL (HTTPS)
               ↑ env: DATABASE_URL, JWT_SECRET, …
-              ↑ pre-deploy: alembic upgrade head
+              ↑ startup: alembic upgrade head (in start-production.sh)
 ```
+
+Migrations run in the container **start script** (not Render Pre-Deploy), so this
+works on the **free tier** where pre-deploy commands require a paid instance.
 
 ## Prerequisites
 
@@ -47,7 +50,8 @@ on Render.
 Do **not** commit the connection string. Store it only in Render environment
 variables (and in local `.env` for development).
 
-Apply migrations once locally or let Render pre-deploy handle them:
+Apply migrations once locally, or let the container start script handle them on
+first boot:
 
 ```bash
 # Optional: verify locally before first Render deploy
@@ -72,14 +76,8 @@ alembic upgrade head
 4. **Important:** under **Settings → Build & Deploy**, set **Auto-Deploy** to
    **No** until TM-4 enables CI/CD. Use **Manual Deploy** for each release.
 
-5. Set **Pre-Deploy Command**:
-
-```bash
-alembic upgrade head
-```
-
-This applies migrations before each deploy goes live. If migrations fail, the
-deploy is blocked.
+5. Leave **Pre-Deploy Command** empty — migrations run automatically via
+   `scripts/start-production.sh` when the container starts (free-tier compatible).
 
 6. Set **Health Check Path**: `/health`
 
@@ -107,7 +105,8 @@ contains placeholders only.
 ### 4. First deploy
 
 1. Click **Manual Deploy → Deploy latest commit**.
-2. Watch build logs until the pre-deploy migration and web process succeed.
+2. Watch build logs until you see `Running database migrations...` and
+   `Starting API server...`.
 3. Note the public URL (e.g. `https://task-manager-api.onrender.com`).
 
 Free-tier Render services may take 30–60 seconds to wake after idle sleep. Neon
@@ -155,7 +154,7 @@ in Neon (not container storage).
 
 1. Merge or commit changes to the deployed branch.
 2. In Render: **Manual Deploy → Deploy latest commit**.
-3. Pre-deploy runs `alembic upgrade head` automatically against Neon.
+3. Container startup runs `alembic upgrade head` automatically against Neon.
 4. Confirm `/health` and a smoke test against `/api/v1/tasks`.
 
 ## Logs and troubleshooting
@@ -163,7 +162,7 @@ in Neon (not container storage).
 | Issue | What to check |
 | ----- | ------------- |
 | Build fails | Render build logs; ensure `Dockerfile` builds locally |
-| Pre-deploy fails | Migration logs; run `alembic upgrade head` locally against Neon |
+| Startup fails during migrations | Runtime logs; run `alembic upgrade head` locally against Neon |
 | 502 / service unavailable | Render instance still starting (free tier wake); check deploy logs |
 | `/health` fails | `DATABASE_URL` correct; Neon project active; SSL params present (`sslmode=require`); DNS/network from Render to Neon |
 | 401 on tasks | Register/login first; pass `Authorization: Bearer <token>` |

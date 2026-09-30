@@ -517,10 +517,9 @@ Quick summary:
 1. Use your existing **Neon** connection string (pooled URL recommended).
 2. Create a Render **Web Service** only (Docker runtime — skip Render PostgreSQL).
 3. Set `DATABASE_URL` (Neon), `JWT_SECRET`, and `DEBUG=false` in the service environment.
-4. Set **Pre-Deploy Command** to `alembic upgrade head`.
-5. Set **Health Check Path** to `/health`.
-6. Disable **Auto-Deploy**; use **Manual Deploy** for each release.
-7. Verify with `/health`, `/docs`, register/login, and authenticated task CRUD.
+4. Set **Health Check Path** to `/health` (leave Pre-Deploy empty — migrations run at container startup).
+5. Disable **Auto-Deploy**; use **Manual Deploy** for each release.
+6. Verify with `/health`, `/docs`, register/login, and authenticated task CRUD.
 
 Example smoke test (replace the URL):
 
