@@ -225,14 +225,23 @@ leave no data behind.
 
 ### Continuous integration
 
-GitHub Actions runs the full test suite automatically on every push and pull
-request (`.github/workflows/ci.yml`). The workflow:
+GitHub Actions runs lint and tests automatically on every push and pull request
+(`.github/workflows/ci.yml`). The workflow:
 
 1. Checks out the code
 2. Sets up Python 3.12 with pip caching
-3. Starts a PostgreSQL 16 service container with a health check
-4. Runs `alembic upgrade head`
-5. Runs `pytest -v`
+3. Runs `ruff check .` (fails on lint errors)
+4. Starts a PostgreSQL 16 service container with a health check
+5. Runs `alembic upgrade head`
+6. Runs `pytest -v`
+
+Run lint locally:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+ruff check .
+```
 
 The pipeline uses ephemeral test credentials and does not require a local `.env`
 file, developer PostgreSQL installation, or external services. The workflow
