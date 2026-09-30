@@ -225,8 +225,10 @@ leave no data behind.
 
 ### Continuous integration
 
-GitHub Actions runs lint and tests automatically on every push and pull request
-(`.github/workflows/ci.yml`). The workflow:
+GitHub Actions runs lint, tests, and a Docker build on every push and pull
+request (`.github/workflows/ci.yml`). Two jobs run in parallel:
+
+**`lint-and-test`**
 
 1. Checks out the code
 2. Sets up Python 3.12 with pip caching
@@ -235,12 +237,19 @@ GitHub Actions runs lint and tests automatically on every push and pull request
 5. Runs `alembic upgrade head`
 6. Runs `pytest -v`
 
-Run lint locally:
+**`docker`**
+
+1. Checks out the code
+2. Runs `docker build -t task-manager-api .` (fails if the image does not build)
+
+Run locally:
 
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
 ruff check .
+pytest
+docker build -t task-manager-api .
 ```
 
 The pipeline uses ephemeral test credentials and does not require a local `.env`
