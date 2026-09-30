@@ -27,6 +27,9 @@ jobs:
       CI: "true"
       DATABASE_URL: postgresql://taskmanager_test:testpassword@localhost:5432/taskmanager_test
       TEST_DATABASE_URL: postgresql://taskmanager_test:testpassword@localhost:5432/taskmanager_test
+      JWT_SECRET: ci-test-jwt-secret-do-not-use-in-production
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 60
 
     steps:
       - name: Check out repository

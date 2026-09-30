@@ -21,8 +21,9 @@ SORT_COLUMN_MAP: dict[TaskSortField, ColumnElement[object]] = {
 }
 
 
-def create_task(db: Session, payload: TaskCreate) -> Task:
+def create_task(db: Session, payload: TaskCreate, *, user_id: int) -> Task:
     task = Task(
+        user_id=user_id,
         title=payload.title,
         description=payload.description,
         status=payload.status,
@@ -37,19 +38,18 @@ def create_task(db: Session, payload: TaskCreate) -> Task:
 def list_tasks(
     db: Session,
     *,
+    user_id: int,
     status: TaskStatus | None = None,
     page: int = 1,
     limit: int = 10,
     sort_by: TaskSortField = TaskSortField.CREATED_AT,
     sort_order: SortOrder = SortOrder.DESC,
 ) -> tuple[list[Task], PaginationMeta]:
-    filters: list[ColumnElement[bool]] = []
+    filters: list[ColumnElement[bool]] = [Task.user_id == user_id]
     if status is not None:
         filters.append(Task.status == status)
 
-    count_stmt = select(func.count()).select_from(Task)
-    if filters:
-        count_stmt = count_stmt.where(*filters)
+    count_stmt = select(func.count()).select_from(Task).where(*filters)
     total = db.scalar(count_stmt) or 0
 
     sort_column = SORT_COLUMN_MAP[sort_by]
@@ -68,8 +68,8 @@ def list_tasks(
     return tasks, pagination
 
 
-def get_task(db: Session, task_id: int) -> Task | None:
-    return db.get(Task, task_id)
+def get_task(db: Session, task_id: int, *, user_id: int) -> Task | None:
+    return db.scalar(select(Task).where(Task.id == task_id, Task.user_id == user_id))
 
 
 def update_task(db: Session, task: Task, payload: TaskUpdate) -> Task:

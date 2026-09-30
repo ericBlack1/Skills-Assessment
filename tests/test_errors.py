@@ -1,7 +1,7 @@
-from fastapi.testclient import TestClient
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.services import task_service
+from tests.conftest import AuthenticatedClient
 
 
 def create_payload(**overrides: object) -> dict[str, object]:
@@ -22,8 +22,8 @@ def assert_error_shape(body: dict[str, object], *, status_code: int, code: str) 
     assert "message" in body
 
 
-def test_missing_title_returns_422_with_field_details(client: TestClient) -> None:
-    response = client.post(
+def test_missing_title_returns_422_with_field_details(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.post(
         "/api/v1/tasks",
         json={"description": "No title", "due_date": "2026-10-15"},
     )
@@ -36,8 +36,8 @@ def test_missing_title_returns_422_with_field_details(client: TestClient) -> Non
     assert "title" in fields
 
 
-def test_invalid_status_returns_422_with_field_details(client: TestClient) -> None:
-    response = client.post(
+def test_invalid_status_returns_422_with_field_details(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.post(
         "/api/v1/tasks",
         json=create_payload(status="blocked"),
     )
@@ -49,8 +49,8 @@ def test_invalid_status_returns_422_with_field_details(client: TestClient) -> No
     assert "status" in fields
 
 
-def test_invalid_pagination_returns_422(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"page": 0, "limit": 101})
+def test_invalid_pagination_returns_422(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"page": 0, "limit": 101})
 
     assert response.status_code == 422
     body = response.json()
@@ -60,8 +60,8 @@ def test_invalid_pagination_returns_422(client: TestClient) -> None:
     assert "limit" in fields
 
 
-def test_invalid_sort_field_returns_422(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks", params={"sort_by": "id"})
+def test_invalid_sort_field_returns_422(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks", params={"sort_by": "id"})
 
     assert response.status_code == 422
     body = response.json()
@@ -69,8 +69,8 @@ def test_invalid_sort_field_returns_422(client: TestClient) -> None:
     assert any(item["field"] == "sort_by" for item in body["error"]["details"])
 
 
-def test_nonexistent_task_returns_404(client: TestClient) -> None:
-    response = client.get("/api/v1/tasks/999999")
+def test_nonexistent_task_returns_404(auth_client: AuthenticatedClient) -> None:
+    response = auth_client.get("/api/v1/tasks/999999")
 
     assert response.status_code == 404
     body = response.json()
@@ -79,7 +79,7 @@ def test_nonexistent_task_returns_404(client: TestClient) -> None:
     assert body["error"]["details"] is None
 
 
-def test_database_error_returns_safe_500(client: TestClient, monkeypatch) -> None:
+def test_database_error_returns_safe_500(auth_client: AuthenticatedClient, monkeypatch) -> None:
     class FakeDatabaseError(SQLAlchemyError):
         pass
 
@@ -88,7 +88,7 @@ def test_database_error_returns_safe_500(client: TestClient, monkeypatch) -> Non
 
     monkeypatch.setattr(task_service, "list_tasks", failing_list_tasks)
 
-    response = client.get("/api/v1/tasks")
+    response = auth_client.get("/api/v1/tasks")
 
     assert response.status_code == 500
     body = response.json()
@@ -98,10 +98,10 @@ def test_database_error_returns_safe_500(client: TestClient, monkeypatch) -> Non
     assert "Traceback" not in response.text
 
 
-def test_patch_null_title_returns_422(client: TestClient) -> None:
-    created = client.post("/api/v1/tasks", json=create_payload(title="Patch target")).json()
+def test_patch_null_title_returns_422(auth_client: AuthenticatedClient) -> None:
+    created = auth_client.post("/api/v1/tasks", json=create_payload(title="Patch target")).json()
 
-    response = client.patch(
+    response = auth_client.patch(
         f"/api/v1/tasks/{created['id']}",
         json={"title": None},
     )
@@ -114,10 +114,10 @@ def test_patch_null_title_returns_422(client: TestClient) -> None:
     assert "DATABASE_ERROR" not in response.text
 
 
-def test_patch_null_status_returns_422(client: TestClient) -> None:
-    created = client.post("/api/v1/tasks", json=create_payload(title="Patch target")).json()
+def test_patch_null_status_returns_422(auth_client: AuthenticatedClient) -> None:
+    created = auth_client.post("/api/v1/tasks", json=create_payload(title="Patch target")).json()
 
-    response = client.patch(
+    response = auth_client.patch(
         f"/api/v1/tasks/{created['id']}",
         json={"status": None},
     )
@@ -130,22 +130,22 @@ def test_patch_null_status_returns_422(client: TestClient) -> None:
     assert "DATABASE_ERROR" not in response.text
 
 
-def test_patch_empty_body_still_works(client: TestClient) -> None:
-    created = client.post("/api/v1/tasks", json=create_payload(title="Unchanged")).json()
+def test_patch_empty_body_still_works(auth_client: AuthenticatedClient) -> None:
+    created = auth_client.post("/api/v1/tasks", json=create_payload(title="Unchanged")).json()
 
-    response = client.patch(f"/api/v1/tasks/{created['id']}", json={})
+    response = auth_client.patch(f"/api/v1/tasks/{created['id']}", json={})
 
     assert response.status_code == 200
     assert response.json()["title"] == "Unchanged"
 
 
-def test_unexpected_error_returns_safe_500(client: TestClient, monkeypatch) -> None:
+def test_unexpected_error_returns_safe_500(auth_client: AuthenticatedClient, monkeypatch) -> None:
     def failing_get_task(*_args, **_kwargs):
         raise RuntimeError("something broke internally")
 
     monkeypatch.setattr(task_service, "get_task", failing_get_task)
 
-    response = client.get("/api/v1/tasks/1")
+    response = auth_client.get("/api/v1/tasks/1")
 
     assert response.status_code == 500
     body = response.json()
