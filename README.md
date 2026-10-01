@@ -15,9 +15,10 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 - Input validation with clear error messages
 - PostgreSQL persistence via SQLAlchemy 2.x
 - Database migrations with Alembic
-- 69 automated API tests with isolated test database setup
+- 72 automated API tests with isolated test database setup
 - Docker and Docker Compose for local containerized runs
 - GitHub Actions CI pipeline
+- Manual production deployment on Render (see [DEPLOYMENT.md](DEPLOYMENT.md))
 
 ## Tech stack
 
@@ -32,6 +33,7 @@ with validated input, persistent PostgreSQL storage, and an automated test suite
 | Testing      | Pytest, FastAPI TestClient, httpx   |
 | Containers   | Docker, Docker Compose              |
 | CI           | GitHub Actions                      |
+| Production   | Render (API) + Neon (PostgreSQL) |
 
 ## Prerequisites
 
@@ -501,21 +503,59 @@ Raw SQLAlchemy/PostgreSQL errors, stack traces, and internal implementation
 details are never returned to clients. The actual exception is logged
 server-side.
 
+## Deployment (Render + Neon)
+
+Production runs the **API on Render** (Docker web service) and uses **Neon** for
+managed PostgreSQL — the same Neon database used in development, not Render
+Postgres. Secrets are set via Render environment variables. Deploys are
+**manual** for now (Auto-Deploy stays off until TM-4 adds CI/CD).
+
+**Full runbook:** [DEPLOYMENT.md](DEPLOYMENT.md)
+
+Quick summary:
+
+1. Use your existing **Neon** connection string (pooled URL recommended).
+2. Create a Render **Web Service** only (Docker runtime — skip Render PostgreSQL).
+3. Set `DATABASE_URL` (Neon), `JWT_SECRET`, and `DEBUG=false` in the service environment.
+4. Set **Health Check Path** to `/health` (leave Pre-Deploy empty — migrations run at container startup).
+5. Disable **Auto-Deploy**; use **Manual Deploy** for each release.
+6. Verify with `/health`, `/docs`, register/login, and authenticated task CRUD.
+
+Example smoke test (replace the URL):
+
+```bash
+export API_URL=https://your-service.onrender.com
+curl "$API_URL/health"
+```
+
+No credentials belong in the repository or Docker image layers.
+
 ## Project structure
 
 ```
 app/
   main.py                   Application entrypoint
   core/config.py            Environment-based settings
+  core/deps.py              JWT auth dependency (get_current_user)
   core/errors.py            Consistent API error responses and handlers
+  core/security.py          Password hashing and JWT helpers
   db/database.py            Engine, session factory, get_db dependency
-  db/models.py              SQLAlchemy Task model and TaskStatus enum
-  schemas/task.py           Pydantic request/response schemas
-  services/task_service.py  Database operations
-  routes/tasks.py             HTTP route handlers
+  db/models.py              User and Task models
+  schemas/auth.py           Register/login request and token schemas
+  schemas/response.py       Standard success response envelope
+  schemas/task.py           Pydantic task request/response schemas
+  services/auth_service.py  Registration and login
+  services/task_service.py  Database operations (user-scoped)
+  routes/auth.py            Auth HTTP routes
+  routes/tasks.py           Task HTTP routes
 alembic/                    Migration environment and versions
+scripts/start-production.sh Production container entrypoint (Render PORT)
+DEPLOYMENT.md               Manual Render deploy runbook
 tests/
-  conftest.py               Test database fixtures
+  conftest.py               Test database and auth fixtures
+  test_auth.py              Registration, login, JWT protection
+  test_task_isolation.py    Cross-user ownership tests
+  test_health.py            Health check tests
   test_tasks.py             CRUD and validation tests
   test_list_pagination.py   Pagination and sorting tests
   test_errors.py            Error response format tests
