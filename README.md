@@ -1,6 +1,7 @@
 # Task Manager API
 
 ![CI](https://github.com/ericBlack1/Skills-Assessment/actions/workflows/ci.yml/badge.svg)
+![Deploy](https://github.com/ericBlack1/Skills-Assessment/actions/workflows/deploy.yml/badge.svg)
 
 A REST API for managing tasks. Create, list, filter, update, and delete tasks
 with validated input, persistent PostgreSQL storage, and an automated test suite.
@@ -225,18 +226,55 @@ leave no data behind.
 
 ### Continuous integration
 
-GitHub Actions runs the full test suite automatically on every push and pull
-request (`.github/workflows/ci.yml`). The workflow:
+GitHub Actions runs lint, tests, and a Docker build on every push and pull
+request (`.github/workflows/ci.yml`). Two jobs run in parallel:
+
+**`lint-and-test`**
 
 1. Checks out the code
 2. Sets up Python 3.12 with pip caching
-3. Starts a PostgreSQL 16 service container with a health check
-4. Runs `alembic upgrade head`
-5. Runs `pytest -v`
+3. Runs `ruff check .` (fails on lint errors)
+4. Starts a PostgreSQL 16 service container with a health check
+5. Runs `alembic upgrade head`
+6. Runs `pytest -v`
+
+**`docker`**
+
+1. Checks out the code
+2. Runs `docker build -t task-manager-api .` (fails if the image does not build)
+
+Run locally:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+ruff check .
+pytest
+docker build -t task-manager-api .
+```
 
 The pipeline uses ephemeral test credentials and does not require a local `.env`
 file, developer PostgreSQL installation, or external services. The workflow
 fails if any test fails.
+
+### Continuous deployment
+
+When CI succeeds on a push to **`main`**, `.github/workflows/deploy.yml`:
+
+1. Triggers a Render deploy via **deploy hook**
+2. Polls the live **`/health`** endpoint until it returns success (or times out)
+
+Configure these **GitHub repository secrets** (names only — set values in GitHub):
+
+| Secret | Purpose |
+| ------ | ------- |
+| `RENDER_DEPLOY_HOOK_URL` | Render deploy hook URL (Settings → Deploy Hook) |
+| `RENDER_SERVICE_URL` | Public API URL, e.g. `https://task-manager-api.onrender.com` |
+
+Keep Render **Auto-Deploy** disabled; GitHub Actions triggers deploys after CI
+passes. Production `DATABASE_URL` and `JWT_SECRET` remain in Render env vars only.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for full setup and rollback.
 
 ## API endpoints
 
@@ -507,8 +545,8 @@ server-side.
 
 Production runs the **API on Render** (Docker web service) and uses **Neon** for
 managed PostgreSQL — the same Neon database used in development, not Render
-Postgres. Secrets are set via Render environment variables. Deploys are
-**manual** for now (Auto-Deploy stays off until TM-4 adds CI/CD).
+Postgres. Secrets are set via Render environment variables. **Auto-deploy** runs
+via GitHub Actions on merge to `main` (Render Auto-Deploy stays off).
 
 **Full runbook:** [DEPLOYMENT.md](DEPLOYMENT.md)
 
@@ -516,10 +554,10 @@ Quick summary:
 
 1. Use your existing **Neon** connection string (pooled URL recommended).
 2. Create a Render **Web Service** only (Docker runtime — skip Render PostgreSQL).
-3. Set `DATABASE_URL` (Neon), `JWT_SECRET`, and `DEBUG=false` in the service environment.
-4. Set **Health Check Path** to `/health` (leave Pre-Deploy empty — migrations run at container startup).
-5. Disable **Auto-Deploy**; use **Manual Deploy** for each release.
-6. Verify with `/health`, `/docs`, register/login, and authenticated task CRUD.
+3. Set `DATABASE_URL` (Neon), `JWT_SECRET`, and `DEBUG=false` in Render env vars.
+4. Set **Health Check Path** to `/health`; leave Pre-Deploy empty.
+5. Disable Render **Auto-Deploy**; add GitHub secrets `RENDER_DEPLOY_HOOK_URL` and `RENDER_SERVICE_URL`.
+6. Merge to `main` → CI passes → Deploy workflow updates production.
 
 Example smoke test (replace the URL):
 
